@@ -4,6 +4,9 @@ on:
   release:
     types: [created]
 
+workspaces:
+  - name: source
+
 jobs:
   publish:
     runs-on: ubuntu-latest
