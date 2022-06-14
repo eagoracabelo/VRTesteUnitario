@@ -1,18 +1,40 @@
-name: Deploy Javadoc
+name: JIB container publish
 
 on:
-  push:
-    branches:
-      - main
+  release:
+    types: [created]
 
 jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
-      - name: Deploy JavaDoc 🚀
-        uses: MathieuSoysal/Javadoc-publisher.yml@v2.0.4
+      - name: JIB container build and publish
+        uses: MathieuSoysal/jib-container-publish.yml@v2.0.7
         with:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          javadoc-branch: javadoc
-          java-version: 8
-          target-folder: javadoc 
+          PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+        script: |
+          #!/bin/sh
+          set -o errexit
+          # Adds Gradle init script that applies the Jib Gradle plugin.
+          echo "initscript {
+                  repositories { maven { url 'https://plugins.gradle.org/m2' } }
+                  dependencies { classpath 'gradle.plugin.com.google.cloud.tools:jib-gradle-plugin:+' }
+                }
+                rootProject {
+                  afterEvaluate {
+                    if (!project.plugins.hasPlugin('com.google.cloud.tools.jib')) {
+                      project.apply plugin: com.google.cloud.tools.jib.gradle.JibPlugin
+                    }
+                  }
+                }" > "$HOME"/init-script.gradle
+          # Runs the Gradle Jib build.
+          gradle jib \
+            --stacktrace --console=plain \
+            --init-script="$HOME"/init-script.gradle \
+            --gradle-user-home="$HOME"/.gradle \
+            -Dgradle.user.home="$HOME"/.gradle \
+            -Duser.home="$HOME" \
+            -Djib.allowInsecureRegistries="$(params.INSECUREREGISTRY)" \
+            -Djib.to.image="$(params.IMAGE)" \
+            -Djib.outputPaths.digest="$(workspaces.source.path)/$(params.DIRECTORY)/image-digest" \
+            $(params.EXTRA_ARGS)
